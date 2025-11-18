@@ -55,6 +55,9 @@ namespace LEGOModelImporter
             if (EditorApplication.isPlaying) return;
             if (!ToolsSettings.IsBrickBuildingOn) return;
 
+            // Safety check
+            if (Selection.gameObjects == null) return;
+
             // Check previously selected bricks that are now deselected
             var bricksToCheck = new List<Brick>();
             foreach (var kvp in brickWasSelected)
