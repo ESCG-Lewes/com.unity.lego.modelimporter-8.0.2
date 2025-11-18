@@ -1323,20 +1323,13 @@ namespace LEGOModelImporter
 
         public static bool IsOverSceneView()
         {
-            try
-            {
-                if(SceneView.mouseOverWindow == null)
-                {
-                    return false;
-                }
-                System.Type windowOver = SceneView.mouseOverWindow.GetType();
-                System.Type sceneView = typeof(SceneView);
-                return windowOver != null && sceneView != null && windowOver.Equals(sceneView);
-            }
-            catch
+            if(SceneView.mouseOverWindow == null)
             {
                 return false;
             }
+            System.Type windowOver = SceneView.mouseOverWindow.GetType();
+            System.Type sceneView = typeof(SceneView);
+            return windowOver.Equals(sceneView);
         }
 
         static bool sceneViewHasFocus = false;

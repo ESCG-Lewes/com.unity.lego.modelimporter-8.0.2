@@ -212,13 +212,7 @@ namespace LEGOModelImporter
 
             GUILayout.Space(16);
             GUILayout.Label("Processing", EditorStyles.boldLabel);
-
-            // Check if auto-processing is disabled
-            if (!ToolsSettings.AutoProcessGroups)
-            {
-                EditorGUILayout.HelpBox("Auto Processing is disabled. Enable in LEGO Tools > Brick Building Settings to process groups.", MessageType.Warning);
-            }
-            else if (processedProp.boolValue)
+            if (processedProp.boolValue)
             {
                 EditorGUILayout.HelpBox("Already Processed", MessageType.Info);
             }
@@ -356,28 +350,23 @@ namespace LEGOModelImporter
                 EditorGUILayout.PropertyField(randomizeNormalsProp, new GUIContent("Add Noise To Normals", "A small amount of noise adds visual detail."));
 
 
-                /*				
-                GUILayout.Space(16);
-                EditorGUILayout.PropertyField(imperfectionsProp);
+                /*				GUILayout.Space(16);
+                                EditorGUILayout.PropertyField(imperfectionsProp);
 
-                // Imperfections UI.
-                if (((ModelGroup.Imperfections)imperfectionsProp.intValue & ModelGroup.Imperfections.UVDegradation) == ModelGroup.Imperfections.UVDegradation)
-                {
-                    EditorGUILayout.HelpBox("UV degradation has not been implemented yet.", MessageType.Warning);
-                }
-                if (((ModelGroup.Imperfections)imperfectionsProp.intValue & ModelGroup.Imperfections.Scratches) == ModelGroup.Imperfections.Scratches)
-                {
-                    EditorGUILayout.HelpBox("Scratches have not been implemented yet.", MessageType.Warning);
-                }*/
+                                // Imperfections UI.
+                                if (((ModelGroup.Imperfections)imperfectionsProp.intValue & ModelGroup.Imperfections.UVDegradation) == ModelGroup.Imperfections.UVDegradation)
+                                {
+                                    EditorGUILayout.HelpBox("UV degradation has not been implemented yet.", MessageType.Warning);
+                                }
+                                if (((ModelGroup.Imperfections)imperfectionsProp.intValue & ModelGroup.Imperfections.Scratches) == ModelGroup.Imperfections.Scratches)
+                                {
+                                    EditorGUILayout.HelpBox("Scratches have not been implemented yet.", MessageType.Warning);
+                                }*/
 
                 GUILayout.Space(16);
                 if (PrefabUtility.IsPartOfAnyPrefab(target))
                 {
                     EditorGUILayout.HelpBox("You cannot process a prefab instance. Please perform processing on the prefab itself.", MessageType.Warning);
-                }
-                else if (!ToolsSettings.AutoProcessGroups)
-                {
-                    EditorGUILayout.HelpBox("Processing is disabled in settings.", MessageType.Warning);
                 }
                 else
                 {

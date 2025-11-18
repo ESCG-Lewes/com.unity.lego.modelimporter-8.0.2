@@ -2,7 +2,6 @@
 // Unauthorized copying of this file, via any medium is strictly prohibited
 
 using UnityEditor;
-using UnityEngine;
 
 namespace LEGOModelImporter
 {
@@ -25,28 +24,12 @@ namespace LEGOModelImporter
 
         private void OnGUI()
         {
-            EditorGUILayout.LabelField("Settings", EditorStyles.boldLabel);
-
             var snapDistance = EditorGUILayout.FloatField("Sticky Snap Distance", ToolsSettings.StickySnapDistance);
             ToolsSettings.StickySnapDistance = snapDistance;
 
-            EditorGUILayout.Space();
-
             var maxTries = EditorGUILayout.IntSlider("Max Tries Per Brick", ToolsSettings.MaxTriesPerBrick, 1, 20);
             ToolsSettings.MaxTriesPerBrick = maxTries;
-
-            EditorGUILayout.Space();
-
-            // Add this new toggle
-            var lockBricks = EditorGUILayout.Toggle("Lock Bricks After Placement", ToolsSettings.LockBricksAfterPlacement);
-            ToolsSettings.LockBricksAfterPlacement = lockBricks;
-            
-            EditorGUILayout.Space();
-
-            EditorGUILayout.LabelField("Processing", EditorStyles.boldLabel);
-            var autoProcess = EditorGUILayout.Toggle("Auto Process Groups", ToolsSettings.AutoProcessGroups);
-            ToolsSettings.AutoProcessGroups = autoProcess;
-            EditorGUILayout.HelpBox("When disabled, bricks can be moved after being placed. Enable to lock bricks via processing.", MessageType.Info);
         }
+
     }
 }
