@@ -7,7 +7,7 @@
   "description": "This package allows you to render LEGO bricks on the screen by:\n\n▪ Import models from LXFML or LDraw\n▪ Various optimization options\n▪ Shaders",
   "dependencies": {
     "com.unity.render-pipelines.universal": "12.1.2",
-    "com.unity.ugui": "2.0.0",
+    "com.unity.ugui": "1.0.0",
     "com.unity.lego.materials": "3.0.0"
   },
  
