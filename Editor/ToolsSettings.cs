@@ -15,6 +15,10 @@ namespace LEGOModelImporter
         static bool initialized = false;        
 
         #region Pref keys
+        static readonly string autoProcessGroupsPrefsKey = "com.unity.lego.modelimporter.autoProcessGroups";
+
+        static readonly string lockBricksAfterPlacementPrefsKey = "com.unity.lego.modelimporter.lockBricksAfterPlacement";
+
         static readonly string stickySnapDistancePrefsKey = "com.unity.lego.modelimporter.stickySnapDistance";
         static readonly string disablePrefabAutoSavePrefsKey = "com.unity.lego.modelimporter.disablePrefabAutoSave";
         static readonly string maxTriesPerBrickPrefsKey = "com.unity.lego.modelimporter.maxTriesPerBrick";
@@ -34,6 +38,11 @@ namespace LEGOModelImporter
         #endregion
 
         #region Menu paths
+
+        const string autoProcessGroupsMenuPath = "LEGO Tools/Auto Process Groups";
+
+        const string lockBricksAfterPlacementMenuPath = "LEGO Tools/Lock Bricks After Placement";
+
         const string disablePrefabAutoSaveMenuPath = "LEGO Tools/Disable Prefab Auto Save";
         internal const string selectConnectedMenuPath = "LEGO Tools/Select Connected Bricks";
         const string rotateGizmoOnMenuPath = "LEGO Tools/Show Rotate Gizmo";
@@ -45,6 +54,11 @@ namespace LEGOModelImporter
         #endregion
 
         #region Default values
+        static readonly bool autoProcessGroupsDefault = false;
+
+
+        static readonly bool lockBricksAfterPlacementDefault = true;
+
         static readonly float stickySnapDistanceDefault = 20.0f;
         static readonly bool disablePrefabAutoSaveDefault = true;
         static readonly bool selectConnectedDefault = true;
@@ -55,6 +69,11 @@ namespace LEGOModelImporter
         #endregion
 
         #region Settings values
+        static bool autoProcessGroups = autoProcessGroupsDefault;
+
+
+        static bool lockBricksAfterPlacement = lockBricksAfterPlacementDefault;
+
         static float stickySnapDistance = stickySnapDistanceDefault;
         static bool disablePrefabAutoSave = disablePrefabAutoSaveDefault;
         static int maxTriesPerBrick = BrickBuildingUtility.DefaultMaxBricksToConsiderWhenFindingConnections;
@@ -66,6 +85,11 @@ namespace LEGOModelImporter
         #endregion
 
         #region Events
+
+        /// <summary>
+        /// Raised when the state of lock bricks after placement is changed
+        /// </summary>
+        public static event Action<bool> lockBricksAfterPlacementChanged;
 
         /// <summary>
         /// Raised when the state of brick building is changed
@@ -90,6 +114,52 @@ namespace LEGOModelImporter
         #endregion
 
         #region Public properties
+
+        /// <summary>
+/// Whether or not to automatically process model groups (which locks bricks)
+/// </summary>
+public static bool AutoProcessGroups
+{
+    get
+    {
+        if (!initialized)
+        {
+            Initialize();
+        }
+        return autoProcessGroups;
+    }
+    set
+    {
+        autoProcessGroups = value;
+        EditorPrefs.SetBool(autoProcessGroupsPrefsKey, autoProcessGroups);
+    }
+}
+
+        /// <summary>
+        /// Whether or not to lock bricks after they've been placed and deselected
+        /// </summary>
+        public static bool LockBricksAfterPlacement
+        {
+            get
+            {
+                if (!initialized)
+                {
+                    Initialize();
+                }
+                return lockBricksAfterPlacement;
+            }
+            set
+            {
+                var oldValue = lockBricksAfterPlacement;
+                lockBricksAfterPlacement = value;
+                EditorPrefs.SetBool(lockBricksAfterPlacementPrefsKey, lockBricksAfterPlacement);
+                if (lockBricksAfterPlacement != oldValue)
+                {
+                    lockBricksAfterPlacementChanged?.Invoke(value);
+                }
+            }
+        }
+
         /// <summary>
         /// Whether or not to show the rotation gizmos on brick selections
         /// </summary>
@@ -255,6 +325,11 @@ namespace LEGOModelImporter
 
         static void Initialize()
         {
+            autoProcessGroups = EditorPrefs.GetBool(autoProcessGroupsPrefsKey, autoProcessGroupsDefault);
+
+            lockBricksAfterPlacement = EditorPrefs.GetBool(lockBricksAfterPlacementPrefsKey, lockBricksAfterPlacementDefault);
+
+
             disablePrefabAutoSave = EditorPrefs.GetBool(disablePrefabAutoSavePrefsKey, disablePrefabAutoSaveDefault);
             if (disablePrefabAutoSave)
             {
@@ -283,6 +358,33 @@ namespace LEGOModelImporter
 
 
         #region Menu items
+
+        [MenuItem(autoProcessGroupsMenuPath, priority = 42)]
+        static void ToggleAutoProcessGroups()
+        {
+            AutoProcessGroups = !AutoProcessGroups;
+        }
+
+        [MenuItem(autoProcessGroupsMenuPath, validate = true)]
+        static bool ValidateAutoProcessGroups()
+        {
+            Menu.SetChecked(autoProcessGroupsMenuPath, autoProcessGroups);
+            return IsBrickBuildingOn;
+        }
+        
+        [MenuItem(lockBricksAfterPlacementMenuPath, priority = 41)]
+        static void ToggleLockBricksAfterPlacement()
+        {
+            LockBricksAfterPlacement = !LockBricksAfterPlacement;
+        }
+
+        [MenuItem(lockBricksAfterPlacementMenuPath, validate = true)]
+        static bool ValidateLockBricksAfterPlacement()
+        {
+            Menu.SetChecked(lockBricksAfterPlacementMenuPath, lockBricksAfterPlacement);
+            return IsBrickBuildingOn;
+        }
+
         [MenuItem(rotateGizmoOnMenuPath, priority = 40)]
         static void ToggleRotateGizmoOn()
         {
