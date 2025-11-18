@@ -1,140 +1,328 @@
 ﻿// Copyright (C) LEGO System A/S - All Rights Reserved
 // Unauthorized copying of this file, via any medium is strictly prohibited
-// Place this file in: Editor/Utilities/BrickMovementHandler.cs
 
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using System.Collections.Generic;
+using LEGOMaterials;
 
 namespace LEGOModelImporter
 {
     /// <summary>
-    /// Monitors brick movements and automatically decouples them when Lock Bricks After Placement is disabled
+    /// Custom editor for bricks with decoupling support
     /// </summary>
-    [InitializeOnLoad]
-    public static class BrickMovementHandler
+    [CustomEditor(typeof(Brick)), CanEditMultipleObjects]
+    internal class BrickEditor : Editor
     {
-        private static Dictionary<Brick, Vector3> brickLastPositions = new Dictionary<Brick, Vector3>();
-        private static Dictionary<Brick, bool> brickWasSelected = new Dictionary<Brick, bool>();
-        private static bool isInitialized = false;
+        static readonly float alphaBarHeight = 3.0f;
 
-        static BrickMovementHandler()
+        SerializedProperty designIDProp;
+
+        Dictionary<Brick, List<int>> brickToMaterialIDs = new Dictionary<Brick, List<int>>();
+
+        private void OnEnable()
         {
-            EditorApplication.update += OnEditorUpdate;
-            Selection.selectionChanged += OnSelectionChanged;
-            ToolsSettings.lockBricksAfterPlacementChanged += OnLockSettingChanged;
-            isInitialized = true;
+            designIDProp = serializedObject.FindProperty("designID");
         }
 
-        private static void OnEditorUpdate()
+        /// <inheritdoc/>
+        public override void OnInspectorGUI()
         {
-            if (EditorApplication.isPlaying) return;
-            if (!ToolsSettings.IsBrickBuildingOn) return;
+            serializedObject.Update();
 
-            // Safety check for SceneView
-            if (SceneView.lastActiveSceneView == null) return;
+            EditorGUI.BeginDisabledGroup(true);
+            EditorGUILayout.PropertyField(designIDProp);
+            EditorGUI.EndDisabledGroup();
 
-            // Clean up null entries
-            var keysToRemove = new List<Brick>();
-            foreach (var kvp in brickLastPositions)
+            // Show parent hierarchy info
+            var brick = (Brick)target;
+            var modelGroup = brick.GetComponentInParent<ModelGroup>();
+            if (modelGroup != null)
             {
-                if (kvp.Key == null)
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Hierarchy", EditorStyles.boldLabel);
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUILayout.TextField("Model Group", modelGroup.groupName);
+                if (modelGroup.transform.parent != null)
                 {
-                    keysToRemove.Add(kvp.Key);
-                }
-            }
-            foreach (var key in keysToRemove)
-            {
-                brickLastPositions.Remove(key);
-                brickWasSelected.Remove(key);
-            }
-        }
-
-        private static void OnSelectionChanged()
-        {
-            if (EditorApplication.isPlaying) return;
-            if (!ToolsSettings.IsBrickBuildingOn) return;
-
-            // Check previously selected bricks that are now deselected
-            var bricksToCheck = new List<Brick>();
-            foreach (var kvp in brickWasSelected)
-            {
-                if (kvp.Value && kvp.Key != null)
-                {
-                    // This brick was selected, check if it's still selected
-                    bool stillSelected = System.Array.Exists(Selection.gameObjects, go => 
-                        go != null && (go == kvp.Key.gameObject || go.GetComponent<Brick>() == kvp.Key));
-                    
-                    if (!stillSelected)
+                    var model = modelGroup.GetComponentInParent<Model>();
+                    if (model != null)
                     {
-                        bricksToCheck.Add(kvp.Key);
+                        EditorGUILayout.TextField("Model", model.name);
                     }
                 }
-            }
-
-            // Update selection status for all bricks
-            brickWasSelected.Clear();
-            foreach (var go in Selection.gameObjects)
-            {
-                if (go != null)
-                {
-                    var brick = go.GetComponent<Brick>();
-                    if (brick != null)
-                    {
-                        brickWasSelected[brick] = true;
-                        // Store initial position when selected
-                        if (!brickLastPositions.ContainsKey(brick))
-                        {
-                            brickLastPositions[brick] = brick.transform.position;
-                        }
-                    }
-                }
-            }
-
-            // Process deselected bricks
-            foreach (var brick in bricksToCheck)
-            {
-                HandleBrickDeselection(brick);
-            }
-        }
-
-        private static void HandleBrickDeselection(Brick brick)
-        {
-            if (brick == null) return;
-            if (ToolsSettings.LockBricksAfterPlacement) return;
-
-            // Check if brick has moved
-            if (brickLastPositions.TryGetValue(brick, out Vector3 lastPosition))
-            {
-                float distanceMoved = Vector3.Distance(brick.transform.position, lastPosition);
+                EditorGUI.EndDisabledGroup();
                 
-                // If brick moved more than a small threshold, decouple it
-                if (distanceMoved > 0.01f)
+                // Show decoupling button
+                if (targets.Length == 1)
                 {
-                    var modelGroup = brick.GetComponentInParent<ModelGroup>();
-                    if (modelGroup != null && !modelGroup.autoGenerated)
+                    EditorGUILayout.Space();
+                    if (BrickDecoupler.CanDecoupleBrick(brick))
                     {
-                        // Only decouple if it's part of a non-auto-generated group
-                        if (BrickDecoupler.CanDecoupleBrick(brick))
+                        if (!ToolsSettings.LockBricksAfterPlacement)
                         {
-                            Debug.Log($"Brick {brick.designID} moved {distanceMoved} units - decoupling from {modelGroup.groupName}");
+                            EditorGUILayout.HelpBox("Brick will be automatically decoupled when moved while deselected.", MessageType.Info);
+                        }
+                        
+                        if (GUILayout.Button("Decouple Brick Now"))
+                        {
                             BrickDecoupler.DecoupleBrick(brick);
+                            GUIUtility.ExitGUI();
+                        }
+                    }
+                    else if (ToolsSettings.LockBricksAfterPlacement)
+                    {
+                        EditorGUILayout.HelpBox("Decoupling disabled: Lock Bricks After Placement is enabled. Disable it in LEGO Tools > Brick Building Settings.", MessageType.Warning);
+                    }
+                }
+                else if (targets.Length > 1)
+                {
+                    var canDecoupleAll = true;
+                    foreach (var t in targets)
+                    {
+                        var b = (Brick)t;
+                        if (!BrickDecoupler.CanDecoupleBrick(b))
+                        {
+                            canDecoupleAll = false;
+                            break;
+                        }
+                    }
+                    
+                    if (canDecoupleAll)
+                    {
+                        EditorGUILayout.Space();
+                        if (GUILayout.Button($"Decouple {targets.Length} Bricks"))
+                        {
+                            var bricks = new List<Brick>();
+                            foreach (var t in targets)
+                            {
+                                bricks.Add((Brick)t);
+                            }
+                            BrickDecoupler.DecoupleBricks(bricks);
+                            GUIUtility.ExitGUI();
                         }
                     }
                 }
-                
-                // Clean up
-                brickLastPositions.Remove(brick);
             }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Materials", EditorStyles.boldLabel);
+
+            // Collect material IDs for each selected brick.
+            brickToMaterialIDs.Clear();
+            var anyLegacy = false;
+            var anyPrefab = false;
+            foreach(var target in targets)
+            {
+                var brickTarget = (Brick)target;
+
+                anyLegacy |= brickTarget.IsLegacy();
+
+                brickToMaterialIDs.Add(brickTarget, new List<int>());
+
+                foreach(var part in brickTarget.parts)
+                {
+                    anyPrefab |= PrefabUtility.IsPartOfAnyPrefab(part);
+
+                    brickToMaterialIDs[brickTarget].AddRange(part.materialIDs);
+                }
+            }
+
+            if (anyLegacy)
+            {
+                EditorGUILayout.HelpBox("Selection contains legacy parts. They do not contain collision and connectivity information.", MessageType.Warning);
+            }
+
+            if (anyPrefab)
+            {
+                EditorGUILayout.HelpBox("Selection contains a prefab instance. You cannot recolour a prefab instance. Please perform recolouring on the prefab itself.", MessageType.Warning);
+                return;
+            }
+
+            var sampleList = brickToMaterialIDs[(Brick)target];
+            // Check that all lists have same length.
+            var materialIDListsDifferentLength = false;
+            foreach (var entry in brickToMaterialIDs)
+            {
+                if (sampleList.Count != entry.Value.Count)
+                {
+                    materialIDListsDifferentLength = true;
+                    break;
+                }
+            }
+
+            if (materialIDListsDifferentLength)
+            {
+                EditorGUILayout.HelpBox("The selected bricks do not have the same amount of materials.", MessageType.Info);
+            }
+            else
+            {
+                // Check that all lists are the same.
+                var materialIDDifferentContent = new bool[sampleList.Count];
+                for(var i = 0; i < sampleList.Count; ++i)
+                {
+                    foreach (var entry in brickToMaterialIDs)
+                    {
+                        if (sampleList[i] != entry.Value[i])
+                        {
+                            materialIDDifferentContent[i] = true;
+                            break;
+                        }
+                        materialIDDifferentContent[i] = false;
+                    }
+                }
+
+                for (var i = 0; i < sampleList.Count; ++i)
+                {
+                    DrawMouldingColour(sampleList[i], i, materialIDDifferentContent[i]);
+                }
+            }
+
+            serializedObject.ApplyModifiedProperties();
         }
 
-        private static void OnLockSettingChanged(bool isLocked)
+        private void DrawMouldingColour(int colourID, int listIndex, bool multipleValues)
         {
-            if (isLocked)
+            var position = EditorGUILayout.GetControlRect();
+
+            // Draw label
+            position = EditorGUI.PrefixLabel(position, GUIUtility.GetControlID(FocusType.Passive), new GUIContent("Moulding Colour " + listIndex));
+
+            if (multipleValues)
             {
-                // Clear tracking when locking is enabled
-                brickLastPositions.Clear();
-                brickWasSelected.Clear();
+                // Create box and tooltip.
+                GUI.Box(position, new GUIContent("", "Multiple colours selected"));
+                var colorRect = new Rect(position.x + 1.0f, position.y + 1.0f, position.width - 2.0f, position.height - 2.0f);
+                var lineRect = new Rect(position.x + 1.0f, position.y + 1.0f + colorRect.height / 2.0f, 10.0f, 1.0f);
+                EditorGUI.DrawRect(colorRect, new Color32(209, 209, 209, 255));
+                EditorGUI.DrawRect(lineRect, Color.grey);
+            }
+            else
+            {
+                var mouldingColourID = (MouldingColour.Id)colourID;
+                var colour = MouldingColour.GetColour(mouldingColourID);
+
+                // Create box and tooltip.
+                GUI.Box(position, new GUIContent("", ObjectNames.NicifyVariableName((int)mouldingColourID + " - " + mouldingColourID.ToString())));
+
+                // Draw rects with colour.
+                var colorRect = new Rect(position.x + 1.0f, position.y + 1.0f, position.width - 2.0f, position.height - 2.0f - alphaBarHeight);
+                var alphaRect = new Rect(position.x + 1.0f, position.y + 1.0f + colorRect.height, Mathf.Round((position.width - 2.0f) * colour.a), alphaBarHeight);
+                var blackRect = new Rect(position.x + 1.0f + alphaRect.width, position.y + 1.0f + colorRect.height, position.width - 2.0f - alphaRect.width, alphaBarHeight);
+                EditorGUI.DrawRect(colorRect, new Color(colour.r, colour.g, colour.b));
+                EditorGUI.DrawRect(alphaRect, Color.white);
+                EditorGUI.DrawRect(blackRect, Color.black);
+
+                if (MouldingColour.IsLegacy(mouldingColourID))
+                {
+                    EditorGUILayout.HelpBox($"Moulding Colour {listIndex} is a legacy colour", MessageType.Warning);
+                }
+            }
+
+            // Detect click.
+            if (Event.current.type == EventType.MouseDown)
+            {
+                if (position.Contains(Event.current.mousePosition))
+                {
+                    MouldingColourPicker.Show((c) =>
+                    {
+                        // Collect all parts to record for undo.
+                        foreach (var target in targets)
+                        {
+                            var brickTarget = (Brick)target;
+                            Undo.RegisterFullObjectHierarchyUndo(brickTarget.gameObject, "Changed Material");
+
+                            int indexOffset = 0;
+                            foreach (var partTarget in brickTarget.parts)
+                            {
+                                if (indexOffset <= listIndex && listIndex < indexOffset + partTarget.materialIDs.Count)
+                                {
+                                    Undo.RegisterFullObjectHierarchyUndo(partTarget.gameObject, "Changed Material");
+
+                                    break;
+                                }
+                                indexOffset += partTarget.materialIDs.Count;
+                            }
+                        }
+
+                        // Collect all parts to change the material.
+                        foreach (var target in targets)
+                        {
+                            var brickTarget = (Brick)target;
+                            int indexOffset = 0;
+                            foreach (var partTarget in brickTarget.parts)
+                            {
+                                if (indexOffset <= listIndex && listIndex < indexOffset + partTarget.materialIDs.Count)
+                                {
+                                    // Update material ID.
+                                    partTarget.materialIDs[listIndex - indexOffset] = (int)MouldingColour.GetId(c);
+
+                                    // Collect all materials.
+                                    LXFMLDoc.Brick.Part.Material[] materials = new LXFMLDoc.Brick.Part.Material[partTarget.materialIDs.Count];
+                                    for (var i = 0; i < partTarget.materialIDs.Count; ++i)
+                                    {
+                                        materials[i] = new LXFMLDoc.Brick.Part.Material() { colorId = partTarget.materialIDs[i], shaderId = 0 };
+                                    }
+
+                                    // Update the part materials.
+                                    PartImporter.SetMaterials(partTarget, materials, partTarget.legacy);
+
+                                    // Update knobs and tubes of this brick and the bricks it is connected to directly.
+                                    var connectedBricks = partTarget.brick.GetConnectedBricks(false);
+                                    connectedBricks.Add(partTarget.brick);
+                                    foreach (var brick in connectedBricks)
+                                    {
+                                        foreach (var part in brick.parts)
+                                        {
+                                            if (!part.legacy && part.connectivity)
+                                            {
+                                                foreach (var connectionField in part.connectivity.planarFields)
+                                                {
+                                                    foreach (var connection in connectionField.connections)
+                                                    {
+                                                        connection.UpdateKnobsAndTubes();
+                                                    }
+                                                }
+
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
+
+                                indexOffset += partTarget.materialIDs.Count;
+                            }
+                        }
+
+                        // Collect all parts to record prefab instance modifications.
+                        foreach (var target in targets)
+                        {
+                            var brickTarget = (Brick)target;
+                            if (PrefabUtility.IsPartOfAnyPrefab(brickTarget.gameObject))
+                            {
+                                PrefabUtility.RecordPrefabInstancePropertyModifications(brickTarget.gameObject);
+                            }
+
+                            int indexOffset = 0;
+                            foreach (var partTarget in brickTarget.parts)
+                            {
+                                if (indexOffset <= listIndex && listIndex < indexOffset + partTarget.materialIDs.Count)
+                                {
+                                    if (PrefabUtility.IsPartOfAnyPrefab(partTarget.gameObject))
+                                    {
+                                        PrefabUtility.RecordPrefabInstancePropertyModifications(partTarget.gameObject);
+                                    }
+                                    break;
+                                }
+                                indexOffset += partTarget.materialIDs.Count;
+                            }
+                        }
+                    },
+                    colourID,
+                    false,
+                    false
+                    );
+                }
             }
         }
     }
